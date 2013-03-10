@@ -56,9 +56,15 @@
 
 // For the game.
 #define NUM_DICE                  13 // The number of dice that can be pulled from the cup.
-#define GREEN_DICE                1  // A green die. 3 Brains, 2 Feed, 1 Shot.
-#define YELLOW_DICE               2  // A yellow die. 2 Brains, 2 Feet, 2 Shot.
+#define NUM_DICE_PER_TURN         3  // The number of dice chosen from the container per turn.
+
+#define GREEN_DICE                1  // A green die. 3 Brains, 2 Run, 1 Shot.
+#define YELLOW_DICE               2  // A yellow die. 2 Brains, 2 Run, 2 Shot.
 #define RED_DICE                  3  // A red die. 1 Brain, 2 Run, 3 Shot.
+
+#define SHOTGUN                   0  // The die rolled a shotgun.
+#define BRAINS                    1  // The die rolled braaaiiinnnnnsss.
+#define RUN                       2  // The die rolled feet / run away.
 
 // Process
 #define MODE_TITLE       0 // 1. The title screen
@@ -190,59 +196,154 @@ void turnloop() {
   byte button;
   byte timestamp;
   
-  // Put the dice in the container.
-  float green = 6.0;
-  float yellow = 4.0;
-  float red = 3.0;
-  float total = green + yellow + red;
-  
   while (1) {
-   
     button = ReadButtons();
-    if(buttonJustPressed) {  
+    if (buttonJustPressed) {  
       switch(button) {
         case BUTTON_SELECT:
-
-          int die1 = chooseDie(total, green, yellow, red);
-          total = total - 1;
-          int die2 = chooseDie(total, green, yellow, red);
-          total = total - 1;
-          int die3 = chooseDie(total, green, yellow, red);
-          total = total - 1;
-
+          int dice[3];
+          chooseDice(1, dice);       
           clearScreen();
-          lcd.setCursor(0,0);
-          lcd.print("You selected:");
+          
           lcd.setCursor(0,1);
-          lcd.print(die1);
-          lcd.setCursor(4,1);
-          lcd.print(die2);
-          lcd.setCursor(8,1);
-          lcd.print(die3);
- 
+          lcd.print("You selected:");
+          
+          // Store the strings for each die color.
+          const char *colors[4];
+          colors[1] = "grn";
+          colors[2] = "ylw";
+          colors[3] = "red";
+          
+          lcd.setCursor(0,0);
+          lcd.print(colors[dice[0]]);
+          lcd.setCursor(4,0);
+          lcd.print(colors[dice[1]]);
+          lcd.setCursor(8,0);
+          lcd.print(colors[dice[2]]);          
+          
+          waitForButton();
+          clearScreen();
+          
+          int results[3];
+          rollDice(dice, results);
+          
+          const char *side[3];
+          side[0] = "sg";
+          side[1] = "brains";
+          side[2] = "run";
+          
+          lcd.setCursor(0,0);
+          lcd.print(side[results[0]]);
+          lcd.setCursor(8,0);
+          lcd.print(side[results[1]]);
+          lcd.setCursor(0,1);
+          lcd.print(side[results[2]]);
+          
+          // tallyScore(results, arr);
+          // if (turn == 1) { turn = turn + 1; }
+          // else turn = 1;
+          
           break;
       }  
     }  
-  }  
+    if( buttonJustPressed )
+      buttonJustPressed = false;
+    if( buttonJustReleased )
+      buttonJustReleased = false;  
+  }
 }
 
-int chooseDie(float total, float green, float yellow, float red) {
+/**
+ * Roll the dice!
+ */
+void rollDice(int dice[3], int results[3]) {
+  int green_sides[] = {BRAINS, BRAINS, BRAINS, SHOTGUN, RUN, RUN};
+  int red_sides[] = {BRAINS, SHOTGUN, SHOTGUN, SHOTGUN, RUN, RUN};
+  int yellow_sides[] = {BRAINS, BRAINS, SHOTGUN, SHOTGUN, RUN, RUN};
+
+  for (int x = 0; x <= NUM_DICE_PER_TURN; x++) {
+    int roll = rand() % 6;
+    switch (dice[x]) {
+      case GREEN_DICE:
+        results[x] = green_sides[roll];
+        break;
+      case YELLOW_DICE:
+        results[x] = yellow_sides[roll];
+        break;
+      case RED_DICE:
+        results[x] = red_sides[roll];
+        break;
+    }
+  }
+}
+
+/**
+ * Choose 3 dice from a full container.
+ */
+void chooseDice(int op, int dice[3]) {
+  
+  // Reset the container.
+  if (op == 0) {
+    green = 6.0;
+    yellow = 4.0;
+    red = 3.0;
+  }
+  
+   // Put the dice in the container.
+  static float green = 6.0;
+  static float yellow = 4.0;
+  static float red = 3.0;
+  float total = green + yellow + red;
+           
+  // Select the dice from the container.   
+  for (int x = 0; x < NUM_DICE_PER_TURN; x++) {
+    dice[x] = chooseDie(total, green, yellow, red);
+  }
+}
+
+/**
+ * Select one dice from the container, update the container and return the chosen dice color.
+ */
+int chooseDie(float &total, float &green, float &yellow, float &red) {
 
   float greenNums = green / total * 100;
   float yellowNums = greenNums + (yellow / total * 100);
   
+  // Picking one dice out of the container.
+  total = total - 1;
+  
+  // Update the state of the container and return the chosen die.
   int die = rand() % 100;
   
   if (die < greenNums) {
+    green = green - 1.0;
     return GREEN_DICE;
   }
   else if (die > yellowNums) {
-    
+    red = red - 1.0;
     return RED_DICE;
   }
   else {
+    yellow = yellow - 1.0;
     return YELLOW_DICE;
   } 
+}
+
+/**
+ * Wait until the user hits a button.
+ */
+void waitForButton() {
+  byte button;
+  while (1) {
+    button = ReadButtons();
+    if (buttonJustPressed) {
+      buttonJustPressed = false;
+      if (buttonJustReleased) {
+        buttonJustReleased = false;
+      }
+      return;
+    }
+  }
 }
 
 /**
@@ -250,8 +351,7 @@ int chooseDie(float total, float green, float yellow, float red) {
  * Detect the button pressed and return the value.
  * Uses global values buttonWas, buttonJustPressed, buttonJustReleased.
  */
-byte ReadButtons()
-{
+byte ReadButtons() {
    unsigned int buttonVoltage;
    byte button = BUTTON_NONE;   // Return no button pressed if the below checks don't write to btn.
    
